@@ -1,52 +1,45 @@
 name: 同步内容到 index.php
 
 on:
-  # 每15分钟自动检查一次
   schedule:
     - cron: '*/15 * * * *'
-
-  # 支持手动运行
   workflow_dispatch:
 
-# 允许 Actions 写入仓库
 permissions:
   contents: write
 
-
 jobs:
   sync-m3u:
-
     runs-on: ubuntu-latest
 
-    # ============================================================
-    # 开关配置
-    # ============================================================
     env:
+      # ==============================
+      # 开关
+      # ==============================
 
-      # 主源
       MAIN_SOURCE_ENABLED: "on"
-
-      # CCTV 专版
       CCTV_SOURCE_ENABLED: "on"
-
-      # 锦江
       JINJIANG_ENABLED: "on"
 
-      # 是否统一分组
+      # 是否统一所有频道分组
       UNIFY_GROUPS: "on"
 
       # 企业微信通知
       WECHAT_ENABLED: "on"
 
-      # 统一分组名称
+      # ==============================
+      # 基本配置
+      # ==============================
+
       GROUP_NAME: "央视直播"
 
-      # 到期时间
       EXPIRE_TIME: "2027-12-01 00:00:00"
 
-      # ==========================================================
-      # 源地址
-      # ==========================================================
+      OUTPUT_FILE: "index.php"
+
+      # ==============================
+      # 直播源
+      # ==============================
 
       MAIN_URL: "https://gh-proxy.org/github.com/ioptu/migu_video/raw/refs/heads/main/migu.m3u"
 
@@ -54,58 +47,49 @@ jobs:
 
       JINJIANG_URL: "https://raw.githubusercontent.com/2383534802/ds/refs/heads/main/jinjinag"
 
-      # 最终文件
-      OUTPUT_FILE: "index.php"
-
-
     steps:
 
-      # ==========================================================
-      # 1. 拉取仓库
-      # ==========================================================
+      # =========================================================
+      # 1. Checkout
+      # =========================================================
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
 
-      # ==========================================================
+      # =========================================================
       # 2. 检查旧文件
-      # ==========================================================
+      # =========================================================
+
       - name: 检查旧文件
-        id: old_hash
+        id: old_file
         shell: bash
         run: |
-
           if [ -f "$OUTPUT_FILE" ]; then
-
             OLD_HASH=$(sha256sum "$OUTPUT_FILE" | awk '{print $1}')
-
-            echo "old_hash=$OLD_HASH" >> "$GITHUB_OUTPUT"
-
-            echo "旧文件 SHA256:"
-            echo "$OLD_HASH"
-
           else
-
-            echo "old_hash=none" >> "$GITHUB_OUTPUT"
-
-            echo "旧文件不存在"
-
+            OLD_HASH="none"
           fi
 
+          echo "old_hash=$OLD_HASH" >> "$GITHUB_OUTPUT"
 
-      # ==========================================================
+          echo "旧文件 SHA256:"
+          echo "$OLD_HASH"
+
+
+      # =========================================================
       # 3. 下载主源
-      # ==========================================================
+      # =========================================================
+
       - name: 下载主源
         id: main
         if: env.MAIN_SOURCE_ENABLED == 'on'
         shell: bash
         run: |
-
           echo "======================================"
-          echo "开始下载主源"
+          echo "下载主源"
           echo "======================================"
 
           if curl -fL \
@@ -115,46 +99,40 @@ jobs:
             -o main.m3u
           then
 
-            COUNT=$(grep -c "^#EXTINF" main.m3u || true)
+            COUNT=$(grep -c '^#EXTINF' main.m3u || true)
 
             if [ "$COUNT" -gt 0 ]; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+              echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
-              echo "main_ok=true" >> "$GITHUB_OUTPUT"
-              echo "main_count=$COUNT" >> "$GITHUB_OUTPUT"
-
-              echo "主源成功"
+              echo "主源下载成功"
               echo "频道数量：$COUNT"
-
             else
-
-              echo "main_ok=false" >> "$GITHUB_OUTPUT"
-              echo "main_count=0" >> "$GITHUB_OUTPUT"
+              echo "ok=false" >> "$GITHUB_OUTPUT"
+              echo "count=0" >> "$GITHUB_OUTPUT"
 
               echo "主源没有有效频道"
-
             fi
 
           else
-
-            echo "main_ok=false" >> "$GITHUB_OUTPUT"
-            echo "main_count=0" >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
 
             echo "主源下载失败"
-
           fi
 
 
-      # ==========================================================
-      # 4. 下载 CCTV 专版
-      # ==========================================================
+      # =========================================================
+      # 4. 下载 CCTV
+      # =========================================================
+
       - name: 下载 CCTV 专版
         id: cctv
         if: env.CCTV_SOURCE_ENABLED == 'on'
         shell: bash
         run: |
-
           echo "======================================"
-          echo "开始下载 CCTV 专版"
+          echo "下载 CCTV 专版"
           echo "======================================"
 
           if curl -fL \
@@ -164,46 +142,40 @@ jobs:
             -o cctv.m3u
           then
 
-            COUNT=$(grep -c "^#EXTINF" cctv.m3u || true)
+            COUNT=$(grep -c '^#EXTINF' cctv.m3u || true)
 
             if [ "$COUNT" -gt 0 ]; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+              echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
-              echo "cctv_ok=true" >> "$GITHUB_OUTPUT"
-              echo "cctv_count=$COUNT" >> "$GITHUB_OUTPUT"
-
-              echo "CCTV 专版成功"
+              echo "CCTV 下载成功"
               echo "频道数量：$COUNT"
-
             else
-
-              echo "cctv_ok=false" >> "$GITHUB_OUTPUT"
-              echo "cctv_count=0" >> "$GITHUB_OUTPUT"
+              echo "ok=false" >> "$GITHUB_OUTPUT"
+              echo "count=0" >> "$GITHUB_OUTPUT"
 
               echo "CCTV 没有有效频道"
-
             fi
 
           else
-
-            echo "cctv_ok=false" >> "$GITHUB_OUTPUT"
-            echo "cctv_count=0" >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
 
             echo "CCTV 下载失败"
-
           fi
 
 
-      # ==========================================================
+      # =========================================================
       # 5. 下载锦江
-      # ==========================================================
+      # =========================================================
+
       - name: 下载锦江
         id: jinjiang
         if: env.JINJIANG_ENABLED == 'on'
         shell: bash
         run: |
-
           echo "======================================"
-          echo "开始下载锦江"
+          echo "下载锦江"
           echo "======================================"
 
           if curl -fL \
@@ -213,144 +185,90 @@ jobs:
             -o jinjiang.m3u
           then
 
-            COUNT=$(grep -c "^#EXTINF" jinjiang.m3u || true)
+            COUNT=$(grep -c '^#EXTINF' jinjiang.m3u || true)
 
             if [ "$COUNT" -gt 0 ]; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+              echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
-              echo "jinjiang_ok=true" >> "$GITHUB_OUTPUT"
-              echo "jinjiang_count=$COUNT" >> "$GITHUB_OUTPUT"
-
-              echo "锦江成功"
+              echo "锦江下载成功"
               echo "频道数量：$COUNT"
-
             else
-
-              echo "jinjiang_ok=false" >> "$GITHUB_OUTPUT"
-              echo "jinjiang_count=0" >> "$GITHUB_OUTPUT"
+              echo "ok=false" >> "$GITHUB_OUTPUT"
+              echo "count=0" >> "$GITHUB_OUTPUT"
 
               echo "锦江没有有效频道"
-
             fi
 
           else
-
-            echo "jinjiang_ok=false" >> "$GITHUB_OUTPUT"
-            echo "jinjiang_count=0" >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
 
             echo "锦江下载失败"
-
           fi
 
 
-      # ==========================================================
-      # 6. 合并所有源
-      # ==========================================================
+      # =========================================================
+      # 6. 合并源
+      # =========================================================
+
       - name: 合并直播源
         id: merge
         shell: bash
         run: |
-
-          echo "======================================"
-          echo "开始合并直播源"
-          echo "======================================"
-
-          rm -f new-index.php
-
           echo "#EXTM3U" > new-index.php
 
-
-          # ========================================================
-          # 主源
-          # ========================================================
-
           if [ "$MAIN_SOURCE_ENABLED" = "on" ] &&
-             [ "${{ steps.main.outputs.main_ok }}" = "true" ]; then
+             [ "${{ steps.main.outputs.ok }}" = "true" ]; then
 
             echo "加入主源"
 
-            grep -v "^#EXTM3U" main.m3u >> new-index.php || true
-
+            grep -v '^#EXTM3U' main.m3u >> new-index.php || true
           fi
 
-
-          # ========================================================
-          # CCTV 专版
-          # ========================================================
 
           if [ "$CCTV_SOURCE_ENABLED" = "on" ] &&
-             [ "${{ steps.cctv.outputs.cctv_ok }}" = "true" ]; then
+             [ "${{ steps.cctv.outputs.ok }}" = "true" ]; then
 
-            echo "加入 CCTV 专版"
+            echo "加入 CCTV"
 
-            grep -v "^#EXTM3U" cctv.m3u >> new-index.php || true
-
+            grep -v '^#EXTM3U' cctv.m3u >> new-index.php || true
           fi
 
 
-          # ========================================================
-          # 锦江
-          # ========================================================
-
           if [ "$JINJIANG_ENABLED" = "on" ] &&
-             [ "${{ steps.jinjiang.outputs.jinjiang_ok }}" = "true" ]; then
+             [ "${{ steps.jinjiang.outputs.ok }}" = "true" ]; then
 
             echo "加入锦江"
 
-            grep -v "^#EXTM3U" jinjiang.m3u >> new-index.php || true
-
+            grep -v '^#EXTM3U' jinjiang.m3u >> new-index.php || true
           fi
 
 
-          # ========================================================
-          # 检查合并结果
-          # ========================================================
+          CHANNEL_COUNT=$(grep -c '^#EXTINF' new-index.php || true)
 
-          CHANNEL_COUNT=$(grep -c "^#EXTINF" new-index.php || true)
-
-          echo ""
           echo "======================================"
           echo "合并完成"
-          echo "总频道数量：$CHANNEL_COUNT"
+          echo "频道数量：$CHANNEL_COUNT"
           echo "======================================"
 
-
           if [ "$CHANNEL_COUNT" -le 0 ]; then
-
-            echo "错误：最终没有有效频道"
+            echo "错误：没有有效频道"
             exit 1
-
           fi
-
 
           echo "channel_count=$CHANNEL_COUNT" >> "$GITHUB_OUTPUT"
 
 
-      # ==========================================================
-      # 7. 统一分组
-      #
-      # 如果开启：
-      #
-      # group-title="任何东西"
-      #
-      # 都会变成：
-      #
-      # group-title="央视直播"
-      # ==========================================================
-      - name: 统一分组
+      # =========================================================
+      # 7. 处理分组
+      # =========================================================
+
+      - name: 处理频道分组
         if: env.UNIFY_GROUPS == 'on'
         shell: bash
         run: |
-
-          echo "开始统一分组：$GROUP_NAME"
-
-          sed -i -E \
-            's/group-title="[^"]*"/group-title="央视直播"/g' \
-            new-index.php
-
-
-          # 对没有 group-title 的 EXTINF 尝试补充
-          python3 - <<'PY'
-
+          python3 <<'PY'
           import re
 
           filename = "new-index.php"
@@ -364,44 +282,46 @@ jobs:
 
               if line.startswith("#EXTINF"):
 
-                  if "group-title=" not in line:
+                  # 删除旧的 group-title
+                  line = re.sub(
+                      r',group-title="[^"]*"',
+                      '',
+                      line,
+                      flags=re.IGNORECASE
+                  )
 
-                      # 在频道名称前加入分组
-                      pos = line.find(",")
+                  # 在第一个逗号前加入统一分组
+                  pos = line.find(",")
 
-                      if pos != -1:
-
-                          line = (
-                              line[:pos]
-                              + ',group-title="央视直播"'
-                              + line[pos:]
-                          )
+                  if pos != -1:
+                      line = (
+                          line[:pos]
+                          + ',group-title="央视直播"'
+                          + line[pos:]
+                      )
 
               result.append(line)
 
           with open(filename, "w", encoding="utf-8") as f:
               f.writelines(result)
-
           PY
 
+          echo "频道分组已统一为：央视直播"
 
-          echo "分组处理完成"
 
-
-      # ==========================================================
+      # =========================================================
       # 8. 最终检查
-      # ==========================================================
+      # =========================================================
+
       - name: 最终检查
-        id: final_check
+        id: final
         shell: bash
         run: |
-
-          CHANNEL_COUNT=$(grep -c "^#EXTINF" new-index.php || true)
+          CHANNEL_COUNT=$(grep -c '^#EXTINF' new-index.php || true)
 
           FILE_SIZE=$(stat -c%s new-index.php)
 
           NEW_HASH=$(sha256sum new-index.php | awk '{print $1}')
-
 
           echo "======================================"
           echo "最终检查"
@@ -411,60 +331,48 @@ jobs:
           echo "文件大小：$FILE_SIZE 字节"
           echo "SHA256：$NEW_HASH"
 
-
-          echo "new_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
           echo "channel_count=$CHANNEL_COUNT" >> "$GITHUB_OUTPUT"
           echo "file_size=$FILE_SIZE" >> "$GITHUB_OUTPUT"
-
+          echo "new_hash=$NEW_HASH" >> "$GITHUB_OUTPUT"
 
           if [ "$CHANNEL_COUNT" -le 0 ]; then
-
-            echo "错误：没有频道"
+            echo "错误：最终没有有效频道"
             exit 1
-
           fi
 
-
-          # 防止源突然返回错误页面导致覆盖正常文件
           if [ "$FILE_SIZE" -lt 100 ]; then
-
             echo "错误：文件异常过小"
             exit 1
-
           fi
 
 
-      # ==========================================================
-      # 9. 比较 SHA256
-      # ==========================================================
+      # =========================================================
+      # 9. 比较新旧文件
+      # =========================================================
+
       - name: 比较文件
         id: compare
         shell: bash
         run: |
-
-          OLD_HASH="${{ steps.old_hash.outputs.old_hash }}"
-          NEW_HASH="${{ steps.final_check.outputs.new_hash }}"
-
+          OLD_HASH="${{ steps.old_file.outputs.old_hash }}"
+          NEW_HASH="${{ steps.final.outputs.new_hash }}"
 
           echo "旧 SHA256：$OLD_HASH"
           echo "新 SHA256：$NEW_HASH"
-
 
           if [ "$OLD_HASH" = "$NEW_HASH" ]; then
 
             echo "changed=false" >> "$GITHUB_OUTPUT"
 
-            echo ""
             echo "======================================"
             echo "文件没有变化"
-            echo "跳过 Git 提交"
+            echo "不提交 Git"
             echo "======================================"
 
           else
 
             echo "changed=true" >> "$GITHUB_OUTPUT"
 
-            echo ""
             echo "======================================"
             echo "发现直播源变化"
             echo "准备更新 index.php"
@@ -473,96 +381,79 @@ jobs:
           fi
 
 
-      # ==========================================================
-      # 10. 更新 index.php
-      # ==========================================================
+      # =========================================================
+      # 10. 更新 GitHub
+      # =========================================================
+
       - name: 更新 index.php
         if: steps.compare.outputs.changed == 'true'
         shell: bash
         run: |
-
           mv new-index.php index.php
-
 
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-
           git add index.php
 
-
-          git commit \
-            -m "🔄 自动同步 IPTV 直播源"
-
+          git commit -m "🔄 自动同步 IPTV 直播源"
 
           git push origin main
 
 
-      # ==========================================================
+      # =========================================================
       # 11. 企业微信通知
-      #
-      # 使用你原来的：
-      #
-      # WECHAT_WEBHOOK
-      #
-      # 不需要把 Webhook 写到代码里面
-      # ==========================================================
+      # =========================================================
+
       - name: 企业微信通知
         if: always() && env.WECHAT_ENABLED == 'on'
+        continue-on-error: true
         shell: bash
         env:
           WECHAT_WEBHOOK: ${{ secrets.WECHAT_WEBHOOK }}
         run: |
 
           if [ -z "$WECHAT_WEBHOOK" ]; then
-
             echo "没有配置 WECHAT_WEBHOOK"
             echo "跳过企业微信通知"
-
             exit 0
-
           fi
 
 
           RUN_TIME=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')
 
-
           JOB_STATUS="${{ job.status }}"
 
           CHANGED="${{ steps.compare.outputs.changed }}"
 
-          CHANNEL_COUNT="${{ steps.final_check.outputs.channel_count }}"
+          CHANNEL_COUNT="${{ steps.final.outputs.channel_count }}"
 
-          NEW_HASH="${{ steps.final_check.outputs.new_hash }}"
+          NEW_HASH="${{ steps.final.outputs.new_hash }}"
 
 
           if [ "$JOB_STATUS" = "success" ]; then
-
             STATUS="✅ 成功"
-
           else
-
             STATUS="❌ 失败"
-
           fi
 
 
           if [ "$CHANGED" = "true" ]; then
-
             CHANGE="✅ 发现变化，已更新 index.php"
-
           elif [ "$CHANGED" = "false" ]; then
-
             CHANGE="⏭️ 文件没有变化，未提交"
-
           else
-
-            CHANGE="⚠️ 本次任务未完成"
-
+            CHANGE="⚠️ 本次任务执行失败"
           fi
 
 
-          CONTENT="📡 IPTV 自动同步任务
+          python3 <<PY
+          import json
+          import urllib.request
+
+          webhook = "$WECHAT_WEBHOOK"
+
+          content = """📡 IPTV 自动同步任务
 
 执行时间：$RUN_TIME
 运行状态：$STATUS
@@ -582,25 +473,8 @@ SHA256：
 $NEW_HASH
 
 文件：
-https://github.com/2383534802/ds/blob/main/index.php"
-
-
-          export CONTENT
-
-
-          python3 - <<'PY'
-
-          import os
-          import json
-          import urllib.request
-
-
-          webhook = os.environ.get("WECHAT_WEBHOOK", "")
-          content = os.environ.get("CONTENT", "")
-
-
-          if not webhook:
-              raise SystemExit(0)
+https://github.com/2383534802/ds/blob/main/index.php
+"""
 
 
           data = {
@@ -609,6 +483,10 @@ https://github.com/2383534802/ds/blob/main/index.php"
                   "content": content
               }
           }
+
+
+          if "$JOB_STATUS" != "success":
+              data["text"]["mentioned_list"] = ["@all"]
 
 
           request = urllib.request.Request(
@@ -635,18 +513,17 @@ https://github.com/2383534802/ds/blob/main/index.php"
                       errors="ignore"
                   )
               )
-
           PY
 
 
-      # ==========================================================
+      # =========================================================
       # 12. 无变化日志
-      # ==========================================================
+      # =========================================================
+
       - name: 无变化
         if: steps.compare.outputs.changed == 'false'
         shell: bash
         run: |
-
           RUN_TIME=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')
 
           echo "======================================"
