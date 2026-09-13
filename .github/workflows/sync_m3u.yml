@@ -1,1 +1,425 @@
+---
+name: 同步内容到 index.php
 
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-file:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ==============================
+      # 步骤1：检出仓库代码
+      # ==============================
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+
+      # ==============================
+      # 步骤2：核心同步脚本
+      # ==============================
+      - name: 核心同步脚本
+        run: |
+
+          # ==============================
+          # 地址配置
+          # ==============================
+
+          BACKUP_URL="https://pastecode.dev/raw/2i9vtj9l/paste1.txt"
+
+          MAIN_URL="https://gh-proxy.org/github.com/ioptu/migu_video/raw/refs/heads/main/migu.m3u"
+
+          FIXED_SOURCE_URL1="https://raw.githubusercontent.com/2383534802/ds/refs/heads/main/jinjinag"
+          FIXED1_SWITCH="on"
+
+          FIXED_SOURCE_URL2="https://pastecode.dev/raw/xxxx/xxxx"
+          FIXED2_SWITCH="off"
+
+          FIXED_SOURCE_URL3="https://pastecode.dev/raw/xxxx/xxxx"
+          FIXED3_SWITCH="off"
+
+          FIXED_SOURCE_URL4="https://pastecode.dev/raw/xxxx/xxxx"
+          FIXED4_SWITCH="off"
+
+          # ==============================
+          # 到期配置
+          # ==============================
+
+          EXPIRE_DATETIME="2027-07-01 00:00:00"
+          TASK_FLAG="expire_task_done.flag"
+
+          # ==============================
+          # 分组配置
+          # ==============================
+
+          GROUP_NAME="央视直播"
+          GROUP_SWITCH="on"
+
+          # ==============================
+          # CURL配置
+          # ==============================
+
+          CURL_OPT="--connect-timeout 5 --max-time 15 --retry 2 --retry-delay 2 -L -s"
+
+          export TZ=Asia/Shanghai
+
+          NOW_DATETIME=$(date "+%Y-%m-%d %H:%M:%S")
+
+          echo "===================================="
+          echo "直播源同步任务开始"
+          echo "执行时间：$NOW_DATETIME"
+          echo "===================================="
+
+
+          # ==============================
+          # 判断主源是否到期
+          # ==============================
+
+          if [[ "$NOW_DATETIME" > "$EXPIRE_DATETIME" ]]; then
+
+            echo "主源已到期，使用备用源"
+
+            TARGET_URL="$BACKUP_URL"
+
+            [ ! -f "$TASK_FLAG" ] && touch "$TASK_FLAG"
+
+            LOAD_FIXED_SOURCE="off"
+
+          else
+
+            echo "主源仍在有效期内，使用主源"
+
+            TARGET_URL="$MAIN_URL"
+
+            rm -f "$TASK_FLAG"
+
+            LOAD_FIXED_SOURCE="on"
+
+          fi
+
+
+          echo "目标源：$TARGET_URL"
+          echo "固定源：$LOAD_FIXED_SOURCE"
+
+
+          # ==============================
+          # 备份旧文件
+          # ==============================
+
+          cp -f index.php index.php.bak 2>/dev/null || true
+
+          > index.php
+
+
+          # ==============================
+          # 固定源1
+          #
+          # 这里必须完整保留锦江 ESG 视频
+          # 不再用 sed 截断内容
+          # ==============================
+
+          if [[ "$LOAD_FIXED_SOURCE" == "on" && "$FIXED1_SWITCH" == "on" ]]; then
+
+            echo "正在获取固定源1（锦江视频）..."
+
+            curl $CURL_OPT \
+              -o temp_fix1 \
+              "$FIXED_SOURCE_URL1"
+
+            if [ -s temp_fix1 ]; then
+
+              if grep -q "#EXTM3U" temp_fix1; then
+
+                echo "固定源1检测到 M3U"
+
+                # 完整加入固定源1
+                cat temp_fix1 >> index.php
+
+                echo "固定源1已加入"
+
+              else
+
+                echo "警告：固定源1没有检测到 #EXTM3U"
+
+              fi
+
+            else
+
+              echo "警告：固定源1下载失败"
+
+            fi
+
+            rm -f temp_fix1
+
+          fi
+
+
+          # ==============================
+          # 获取主源
+          # ==============================
+
+          echo "正在获取主直播源..."
+
+          curl $CURL_OPT \
+            -o temp_source \
+            "$TARGET_URL"
+
+
+          # ==============================
+          # 检查主源
+          # ==============================
+
+          if [ ! -s temp_source ]; then
+
+            echo "错误：主源下载失败"
+
+            if [ -f index.php.bak ]; then
+              cp -f index.php.bak index.php
+              echo "已恢复旧 index.php"
+            fi
+
+            rm -f temp_source
+
+            exit 1
+
+          fi
+
+
+          # ==============================
+          # 检查主源是否为M3U
+          # ==============================
+
+          if grep -q "#EXTM3U" temp_source; then
+
+            echo "主源检测到 M3U"
+
+          else
+
+            echo "错误：主源没有检测到 #EXTM3U"
+
+            if [ -f index.php.bak ]; then
+              cp -f index.php.bak index.php
+              echo "已恢复旧 index.php"
+            fi
+
+            rm -f temp_source
+
+            exit 1
+
+          fi
+
+
+          # ==============================
+          # 主源分组处理
+          # ==============================
+
+          if [[ "$GROUP_SWITCH" == "on" ]]; then
+
+            echo "统一主源分组：$GROUP_NAME"
+
+            sed \
+              "s/group-title=\"[^\"]*\"/group-title=\"${GROUP_NAME}\"/g" \
+              temp_source > temp_format
+
+          else
+
+            cp temp_source temp_format
+
+          fi
+
+
+          # ==============================
+          # 加入主源
+          # ==============================
+
+          cat temp_format >> index.php
+
+
+          # ==============================
+          # 固定源2
+          # ==============================
+
+          if [[ "$LOAD_FIXED_SOURCE" == "on" && "$FIXED2_SWITCH" == "on" ]]; then
+
+            echo "正在获取固定源2..."
+
+            curl $CURL_OPT \
+              -o temp_fix2 \
+              "$FIXED_SOURCE_URL2"
+
+            if [ -s temp_fix2 ] && grep -q "#EXTM3U" temp_fix2; then
+
+              cat temp_fix2 >> index.php
+
+            else
+
+              echo "警告：固定源2没有有效 M3U"
+
+            fi
+
+            rm -f temp_fix2
+
+          fi
+
+
+          # ==============================
+          # 固定源3
+          # ==============================
+
+          if [[ "$LOAD_FIXED_SOURCE" == "on" && "$FIXED3_SWITCH" == "on" ]]; then
+
+            echo "正在获取固定源3..."
+
+            curl $CURL_OPT \
+              -o temp_fix3 \
+              "$FIXED_SOURCE_URL3"
+
+            if [ -s temp_fix3 ] && grep -q "#EXTM3U" temp_fix3; then
+
+              cat temp_fix3 >> index.php
+
+            else
+
+              echo "警告：固定源3没有有效 M3U"
+
+            fi
+
+            rm -f temp_fix3
+
+          fi
+
+
+          # ==============================
+          # 固定源4
+          # ==============================
+
+          if [[ "$LOAD_FIXED_SOURCE" == "on" && "$FIXED4_SWITCH" == "on" ]]; then
+
+            echo "正在获取固定源4..."
+
+            curl $CURL_OPT \
+              -o temp_fix4 \
+              "$FIXED_SOURCE_URL4"
+
+            if [ -s temp_fix4 ] && grep -q "#EXTM3U" temp_fix4; then
+
+              cat temp_fix4 >> index.php
+
+            else
+
+              echo "警告：固定源4没有有效 M3U"
+
+            fi
+
+            rm -f temp_fix4
+
+          fi
+
+
+          # ==============================
+          # 清理临时文件
+          # ==============================
+
+          rm -f \
+            temp_source \
+            temp_format \
+            temp_fix1 \
+            temp_fix2 \
+            temp_fix3 \
+            temp_fix4 \
+            index.php.bak
+
+
+          # ==============================
+          # 最终检查
+          # ==============================
+
+          if [ ! -s index.php ]; then
+
+            echo "错误：最终 index.php 是空文件"
+
+            exit 1
+
+          fi
+
+
+          if ! grep -q "#EXTM3U" index.php; then
+
+            echo "错误：最终 index.php 不包含 #EXTM3U"
+
+            exit 1
+
+          fi
+
+
+          echo "===================================="
+          echo "同步完成"
+          echo "index.php 大小："
+          wc -c index.php
+          echo "===================================="
+
+
+      # ==============================
+      # 步骤3：提交并推送
+      # ==============================
+      - name: 提交推送变更
+        run: |
+
+          git config --global user.name "actions@codeberg"
+          git config --global user.email "actions@codeberg.org"
+
+          git add index.php
+
+          git commit -m "自动同步：更新 index.php" || echo "无变更"
+
+          git push
+
+
+      # ==============================
+      # 步骤4：企业微信通知
+      # ==============================
+      - name: 企业微信同步通知
+        if: always()
+        run: |
+          set +e
+          WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b581707c-2415-4b9e-958e-9d0f8fdba1cb"
+          export TZ=Asia/Shanghai
+          RUN_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+          EXPIRE_TIME="2027-12-01 00:00:00"
+          ADVANCE_REMIND_DAYS=30
+          FILE_LINK="https://raw.githubusercontent.com/2383534802/ds/refs/heads/main/index.php"
+
+          if git diff --quiet HEAD -- index.php; then
+            CHANGE="本次无内容变更"
+          else
+            CHANGE="已更新index.php内容"
+          fi
+
+          EXPIRE_TIMESTAMP=$(date -d "$EXPIRE_TIME" +%s)
+          NOW_TIMESTAMP=$(date -d "$RUN_TIME" +%s)
+          DIFF_DAYS=$(( (EXPIRE_TIMESTAMP - NOW_TIMESTAMP) / 86400 ))
+
+          if [[ $DIFF_DAYS -le 0 ]]; then
+            EXPIRE_TIP="到期提示：源已到期，请及时续费"
+          elif [[ $DIFF_DAYS -le $ADVANCE_REMIND_DAYS ]]; then
+            EXPIRE_TIP="到期提示：距离源到期还有 ${DIFF_DAYS} 天"
+          else
+            EXPIRE_TIP=""
+          fi
+
+          MSG="直播源同步任务报告\n====================================\n执行时间：$RUN_TIME\n运行状态：${{ job.status }}\n变更状态：$CHANGE\n到期时间：$EXPIRE_TIME\n分组名称：央视直播\n------------------------------------\n同步周期：每30分钟\n文件链接：$FILE_LINK\n====================================\n$EXPIRE_TIP"
+
+          if [[ "${{ job.status }}" == "failure" ]]; then
+            MSG="$MSG\n@all"
+          fi
+
+          curl --connect-timeout 10 --max-time 20 -H "Content-Type: application/json;charset=utf-8" -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"$MSG\"}}" "$WEBHOOK"
