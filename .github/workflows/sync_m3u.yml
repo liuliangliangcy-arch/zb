@@ -396,7 +396,7 @@ jobs:
           RUN_TIME=$(date "+%Y-%m-%d %H:%M:%S")
           EXPIRE_TIME="2027-12-01 00:00:00"
           ADVANCE_REMIND_DAYS=30
-          FILE_LINK="https://raw.githubusercontent.com/2383534802/ds/refs/heads/main/index.php"
+          FILE_LINK="https://raw.githubusercontent.com/liuliangliangcy-arch/zb/refs/heads/main/index.php"
 
           if git diff --quiet HEAD -- index.php; then
             CHANGE="本次无内容变更"
